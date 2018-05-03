@@ -106,6 +106,7 @@ set_board_info noargs 1
 set_board_info gdb,no_thread_names 1
 set_board_info gdb,no_self_modifying_code 1
 set_board_info gdb,do_reload_on_run 1
+set_board_info gdb,no_hardware_watchpoints 1
 
 set_board_info debug_flags "-g3"
 
