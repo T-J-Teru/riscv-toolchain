@@ -247,6 +247,7 @@ GCC_STAGE_2_BUILD_DIR=${BUILD_DIR}/gcc-stage2
 NEWLIB_BUILD_DIR=${BUILD_DIR}/newlib
 GDBSERVER_BUILD_DIR=${BUILD_DIR}/gdbserver
 DEJAGNU_BUILD_DIR=${BUILD_DIR}/dejagnu
+QEMU_BUILD_DIR=${BUILD_DIR}/qemu
 
 INSTALL_PREFIX_DIR=${INSTALL_DIR}
 INSTALL_SYSCONF_DIR=${INSTALL_DIR}/etc
@@ -303,7 +304,8 @@ then
     then
         rm -fr ${BINUTILS_BUILD_DIR} ${GDB_BUILD_DIR} \
            ${GCC_STAGE_1_BUILD_DIR} ${NEWLIB_BUILD_DIR} \
-           ${GCC_STAGE_2_BUILD_DIR} ${GDBSERVER_BUILD_DIR}
+           ${GCC_STAGE_2_BUILD_DIR} ${GDBSERVER_BUILD_DIR} \
+           ${QEMU_BUILD_DIR}
     else
         rm -fr ${GDBSERVER_BUILD_DIR}
     fi
@@ -362,11 +364,13 @@ source common.sh
 #                    Locations of all the source
 # ====================================================================
 
-BINUTILS_SOURCE_DIR=${TOP}/binutils
-GDB_SOURCE_DIR=${TOP}/gdb
+BINUTILS_SOURCE_DIR=${TOP}/binutils-gdb
+GDB_SOURCE_DIR=${TOP}/binutils-gdb
 GCC_SOURCE_DIR=${TOP}/gcc
 NEWLIB_SOURCE_DIR=${TOP}/newlib
 GDBSERVER_SOURCE_DIR=${TOP}/gdbserver
+DEJAGNU_SOURCE_DIR=${TOP}/dejagnu
+QEMU_SOURCE_DIR=${TOP}/qemu
 
 # ====================================================================
 #                Log git versions into the build log
@@ -377,7 +381,8 @@ log_git_versions binutils "${BINUTILS_SOURCE_DIR}" \
                  gdb "${GDB_SOURCE_DIR}" \
                  gcc "${GCC_SOURCE_DIR}" \
                  newlib "${NEWLIB_SOURCE_DIR}" \
-                 gdbserver "${GDBSERVER_SOURCE_DIR}"
+                 gdbserver "${GDBSERVER_SOURCE_DIR}" \
+                 qemu "${QEMU_SOURCE_DIR}"
 job_done
 
 # ====================================================================
@@ -391,7 +396,7 @@ job_start "Building binutils"
 
 mkdir_and_enter "${BINUTILS_BUILD_DIR}"
 
-if ! run_command ${TOP}/binutils/configure \
+if ! run_command ${BINUTILS_SOURCE_DIR}/configure \
          --prefix=${INSTALL_PREFIX_DIR} \
          --sysconfdir=${INSTALL_SYSCONF_DIR} \
          --localstatedir=${INSTALL_LOCALSTATE_DIR} \
@@ -441,7 +446,7 @@ job_start "Building GDB and sim"
 
 mkdir_and_enter "${GDB_BUILD_DIR}"
 
-if ! run_command ${TOP}/gdb/configure \
+if ! run_command ${GDB_SOURCE_DIR}/configure \
          --prefix=${INSTALL_PREFIX_DIR} \
          --sysconfdir=${INSTALL_SYSCONF_DIR} \
          --localstatedir=${INSTALL_LOCALSTATE_DIR} \
@@ -492,7 +497,7 @@ then
 
     mkdir_and_enter ${GCC_STAGE_1_BUILD_DIR}
 
-    if ! run_command ${TOP}/gcc/configure \
+    if ! run_command ${GCC_SOURCE_DIR}/configure \
                --prefix="${INSTALL_PREFIX_DIR}" \
                --sysconfdir="${INSTALL_SYSCONF_DIR}" \
                --localstatedir="${INSTALL_LOCALSTATE_DIR}" \
@@ -564,7 +569,7 @@ export PATH=${INSTALL_PREFIX_DIR}/bin:$PATH
 
 mkdir_and_enter "${NEWLIB_BUILD_DIR}"
 
-if ! run_command ${TOP}/newlib/configure \
+if ! run_command ${NEWLIB_SOURCE_DIR}/configure \
          --prefix=${INSTALL_PREFIX_DIR} \
          --sysconfdir=${INSTALL_SYSCONF_DIR} \
          --localstatedir=${INSTALL_LOCALSTATE_DIR} \
@@ -599,7 +604,7 @@ job_start "Building stage 2 GCC"
 
 mkdir_and_enter ${GCC_STAGE_2_BUILD_DIR}
 
-if ! run_command ${TOP}/gcc/configure \
+if ! run_command ${GCC_SOURCE_DIR}/configure \
            --prefix="${INSTALL_PREFIX_DIR}" \
            --sysconfdir="${INSTALL_SYSCONF_DIR}" \
            --localstatedir="${INSTALL_LOCALSTATE_DIR}" \
@@ -665,7 +670,7 @@ job_start "Building DejaGNU"
 
 mkdir_and_enter ${DEJAGNU_BUILD_DIR}
 
-if ! run_command ${TOP}/dejagnu/configure \
+if ! run_command ${DEJAGNU_SOURCE_DIR}/configure \
            --prefix="${INSTALL_PREFIX_DIR}"
 then
     error "Failed to configure DejaGNU"
@@ -734,7 +739,7 @@ GDBSERVER_CONFIG_ARGS="${GDBSERVER_CONFIG_ARGS} \
 GDBSERVER_CONFIG_ARGS="${GDBSERVER_CONFIG_ARGS} \
     --with-binutils-incdir=${INSTALL_DIR}/x86_64-pc-linux-gnu/${TARGET_TRIPLET}/include"
 
-if ! run_command ${TOP}/gdbserver/configure ${GDBSERVER_CONFIG_ARGS}
+if ! run_command ${GDBSERVER_SOURCE_DIR}/configure ${GDBSERVER_CONFIG_ARGS}
 then
     error "Failed to configure GDB Server"
 fi
@@ -756,6 +761,62 @@ fi
 
 job_done
 
+# ====================================================================
+#                Build and Install RISC-V Emulator (QEMU)
+# ====================================================================
+
+job_start "Building QEMU"
+
+mkdir_and_enter ${QEMU_BUILD_DIR}
+
+if ! run_command ${QEMU_SOURCE_DIR}/configure \
+           --prefix=${INSTALL_DIR} \
+           --target-list=riscv64-softmmu,riscv32-softmmu,riscv64-linux-user,riscv32-linux-user
+then
+    error "Failed to configure QEMU"
+fi
+
+if ! run_command make
+then
+    error "Failed to build QEMU"
+fi
+
+if ! run_command make install
+then
+    error "Failed to install QEMU"
+fi
+
+job_done
+
+# ====================================================================
+#                Copy run scripts to install dir
+# ====================================================================
+
+job_start "Copying run scripts to install dir"
+
+# If we built a version of GDB that includes a simulator, then it will
+# have already installed a *-run program, which is will now overwrite.
+# Maybe we should have a separate flag to control whether these get
+# installed or not.
+
+if [ "${WITH_XLEN}" == "32" ]
+then
+
+    if ! run_command cp ${TOOLCHAIN_DIR}/run-scripts/riscv32-unknown-elf-run ${INSTALL_DIR}/bin
+    then
+        error "Failed to copy riscv32-unknown-elf-run"
+    fi
+
+else
+
+    if ! run_command cp ${TOOLCHAIN_DIR}/run-scripts/riscv64-unknown-elf-run ${INSTALL_DIR}/bin
+    then
+        error "Failed to copy riscv64-unknown-elf-run"
+    fi
+
+fi
+
+job_done
 
 # ====================================================================
 #                           Finished
