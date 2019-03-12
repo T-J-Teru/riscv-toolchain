@@ -19,6 +19,12 @@
 # Set the environment variable RISCV_NO_DWARF_UNWINDERS to disable
 # DWARF unwinders.
 
+# Only include this file once due to the "rename" commands.
+if { [info exists riscv_dwarf_unwinders_include_only_once] } {
+    return
+}
+set riscv_dwarf_unwinders_include_only_once 1
+
 # We must load this explicitly here, and rename the procedures we want
 # to override.  If we didn't do this, given that mi-support.exp is
 # loaded later in the test files, the procedures loaded then would
