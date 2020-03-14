@@ -764,58 +764,70 @@ job_done
 #                Build and Install RISC-V Emulator (QEMU)
 # ====================================================================
 
-job_start "Building QEMU"
+# QEMU is currently an optional component.
 
-mkdir_and_enter ${QEMU_BUILD_DIR}
-
-if ! run_command ${QEMU_SOURCE_DIR}/configure \
-           --prefix=${INSTALL_DIR} \
-           --target-list=riscv64-softmmu,riscv32-softmmu,riscv64-linux-user,riscv32-linux-user
-then
-    error "Failed to configure QEMU"
-fi
-
-if ! run_command make
-then
-    error "Failed to build QEMU"
-fi
-
-if ! run_command make install
-then
-    error "Failed to install QEMU"
-fi
-
-job_done
-
-# ====================================================================
-#                Copy run scripts to install dir
-# ====================================================================
-
-job_start "Copying run scripts to install dir"
-
-# If we built a version of GDB that includes a simulator, then it will
-# have already installed a *-run program, which is will now overwrite.
-# Maybe we should have a separate flag to control whether these get
-# installed or not.
-
-if [ "${WITH_XLEN}" == "32" ]
+if [ -d "${QEMU_SOURCE_DIR}" ]
 then
 
-    if ! run_command cp ${TOOLCHAIN_DIR}/run-scripts/riscv32-unknown-elf-run ${INSTALL_DIR}/bin
+    job_start "Building QEMU"
+
+    mkdir_and_enter ${QEMU_BUILD_DIR}
+
+    if ! run_command ${QEMU_SOURCE_DIR}/configure \
+         --prefix=${INSTALL_DIR} \
+         --target-list=riscv64-softmmu,riscv32-softmmu,riscv64-linux-user,riscv32-linux-user
     then
-        error "Failed to copy riscv32-unknown-elf-run"
+        error "Failed to configure QEMU"
     fi
+
+    if ! run_command make
+    then
+        error "Failed to build QEMU"
+    fi
+
+    if ! run_command make install
+    then
+        error "Failed to install QEMU"
+    fi
+
+    job_done
+
+    # ====================================================================
+    #                Copy run scripts to install dir
+    # ====================================================================
+
+    job_start "Copying run scripts to install dir"
+
+    # If we built a version of GDB that includes a simulator, then it will
+    # have already installed a *-run program, which is will now overwrite.
+    # Maybe we should have a separate flag to control whether these get
+    # installed or not.
+
+    if [ "${WITH_XLEN}" == "32" ]
+    then
+
+        if ! run_command cp ${TOOLCHAIN_DIR}/run-scripts/riscv32-unknown-elf-run ${INSTALL_DIR}/bin
+        then
+            error "Failed to copy riscv32-unknown-elf-run"
+        fi
+
+    else
+
+        if ! run_command cp ${TOOLCHAIN_DIR}/run-scripts/riscv64-unknown-elf-run ${INSTALL_DIR}/bin
+        then
+            error "Failed to copy riscv64-unknown-elf-run"
+        fi
+
+    fi
+
+    job_done
 
 else
 
-    if ! run_command cp ${TOOLCHAIN_DIR}/run-scripts/riscv64-unknown-elf-run ${INSTALL_DIR}/bin
-    then
-        error "Failed to copy riscv64-unknown-elf-run"
-    fi
+    job_start "Skipping QEMU build and install"
+    job_done
 
 fi
-
-job_done
 
 # ====================================================================
 #                           Finished
